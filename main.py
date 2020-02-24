@@ -2,6 +2,8 @@ import pyxel as px
 import numpy as np
 import pymunk
 
+import constants 
+
 from block import Block, Platform
 from player import Player
 
@@ -20,8 +22,8 @@ if debug:
 
 class App:
     def __init__(self):
-        px.init(256, 200, scale = 3, fps = 60, caption = 'ngon', palette = [0, 1911635, 8267091, 34641, 11227702, 6248271, 12764103, 16777215, 16711757, 16753408, 16772135, 58422, 2731519, 8615580, 16742312, 16764074])
-        px.load("ngon_resources2.pyxres")
+        px.init(256, 200, scale = 3, fps = 60, caption = 'ngon', palette = constants.PALETTE)
+        px.load("ngon_resources3.pyxres")
 
         self.px = px
 
@@ -31,14 +33,15 @@ class App:
         self.ground = pymunk.Segment(self.space.static_body, [-1000, -5], [1000, -5], 5)
         self.ground.friction = 6
         self.ground.elasticity = 0.5
+        self.ground.filter = pymunk.ShapeFilter(categories = constants.MASK_PLATFORM)
 
         self.space.add(self.ground)
 
-        self.blocks = [Block(10, 10, 50, 50), Block(30, 40, 80, 100)]
+        self.blocks = [Block(10, 10, 50, 50), Block(30, 40, 80, 100), Block(10, 10, 80, 150)]
         for b in self.blocks:
             b.add(self.space)
         
-        self.platforms = [Platform(100, 20, 100, 30)]
+        self.platforms = [Platform(100, 90, 300, 00), Platform(100, 200, 380, 00), Platform(100, 200, 300, 200)]
         for p in self.platforms:
             p.add(self.space)
 
@@ -53,21 +56,22 @@ class App:
     def update(self):
         self.space.step(1/180.)    
         self.player.update()
-        
         self.space.step(1/180.)    
         self.player.update()
         self.space.step(1/180.)    
         self.player.update()
+
+        self.player.reset()
 
         playerPos = self.player.player.position
         diffX = px.mouse_x - playerPos[0]
-        offsetXTarget = -playerPos[0] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 2 
+        offsetXTarget = -playerPos[0] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
 
         diffY = px.mouse_y - playerPos[1]
-        offsetYTarget = +playerPos[1] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 2 
+        offsetYTarget = +playerPos[1] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
 
-        self.offsetX = (0.97) * self.offsetX + 0.03 * offsetXTarget
-        self.offsetY = (0.97) * self.offsetY + 0.03 * offsetYTarget
+        self.offsetX = (0.95) * self.offsetX + 0.05 * offsetXTarget
+        self.offsetY = (0.95) * self.offsetY + 0.05 * offsetYTarget
 
     def draw(self):
         px.cls(7)
@@ -77,7 +81,20 @@ class App:
         px.rect(0, px.height + self.offsetY, px.width, 150, 0)
 
         for b in self.blocks:
-            b.draw(px, self.offsetX, self.offsetY)
+            # if block is queried by the player, color it a different color
+            col = 1
+            fill = 13
+
+            if self.player.state['nc']['emitter']:
+                emitter = self.player.state['nc']['emitter']
+                if emitter['pointingAt'] and emitter['pointingAt'].shape == b.shape:
+                    col = 2
+                    fill = 15
+            
+            if self.player.state['persistent']['holding'] and self.player.state['persistent']['holding'].shape == b.shape:
+                fill = False
+
+            b.draw(px, self.offsetX, self.offsetY, col = col, fill = fill)
         
         for p in self.platforms:
             p.draw(px, self.offsetX, self.offsetY)
@@ -85,6 +102,11 @@ class App:
         # draw crosshair
         px.line(px.mouse_x - 1, px.mouse_y, px.mouse_x + 1, px.mouse_y, 1)
         px.line(px.mouse_x, px.mouse_y - 1, px.mouse_x, px.mouse_y + 1, 1)
+
+        px.rectb(10, 5, self.player.maxHealth + 2, 6, 0)
+        px.rect(11, 6, self.player.health, 4, 14)
+
+        px.text(px.width - 70, 5, "field emitter", 10)
 
         if debug:
             options = pymunk.SpaceDebugDrawOptions()

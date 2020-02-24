@@ -2,6 +2,8 @@ import numpy as np
 import pymunk
 import constants
 
+import time
+
 # In n-gon all polygons are convex and are regular (with the exception of rectangles). The center of mass is therefore the average of all the vertices
 
 def lineIntersection(s1, e1, s2, e2):
@@ -50,8 +52,8 @@ def getScanline(vertices):
         segments.append(np.array([vertices[i - 1], vertices[i]]))
         
     endpoints = []
-    for y in range (min_y, max_y):
-        scanline = np.array([[min_x, y], [max_x, y]])
+    for y in range (min_y + 1, max_y):
+        scanline = np.array([[min_x - 1, y], [max_x + 1, y]])
 
         collisions = []
         c = 0
@@ -74,6 +76,9 @@ def getScanline(vertices):
 
     return endpoints
 
+def drawPolygon():
+    pass
+
 #print(getScanline( [
 #[-2, -3.5], [2, -3.5], [4, 0], [2, 3.5], [-2, 3.5], #[-4, 0]]))
 
@@ -94,27 +99,38 @@ class Block:
     def add(self, space):
         space.add(self.body, self.shape)
     
-    def draw(self, px, ox, oy):
+    def draw(self, px, ox, oy, col = 1, fill = None):
         vertices = self.shape.get_vertices()
+
+        transformedVertices = []
+
         for i, v in enumerate(vertices):
             current = v
-            prev = vertices[i - 1]
 
             current = current.rotated(self.body.angle) + self.body.position
-            prev = prev.rotated(self.body.angle) + self.body.position
+            transformedVertices.append(current)
 
-            current[1] = px.height - current[1]
-            prev[1] = px.height - prev[1]
+        if fill:
+            endpoints = getScanline(transformedVertices)
+            for e in endpoints:
+                if e:
 
-            px.line(*(current + (ox, oy)), *(prev + (ox, oy)), 1)
+                    px.line(e[0][0] + ox, px.height - e[0][1] + oy, e[1][0] + ox, px.height - e[1][1] + oy, fill)
+        
+        for i, v in enumerate(transformedVertices):
+            current = transformedVertices[i]
+            prev = transformedVertices[i - 1]
 
+            px.line(current[0] + ox, px.height - current[1] + oy, prev[0] + ox, px.height - prev[1] + oy, col)
+                    
 class Platform:
     def __init__(self, w, h, x, y, friction = 6, elasticity = 0.5): 
         self.body = pymunk.Body(body_type = pymunk.Body.STATIC)
         self.shape = pymunk.Poly.create_box(self.body, (w, h), radius = 0.5)
+        self.shape.filter = pymunk.ShapeFilter(categories = constants.MASK_PLATFORM)
 
         self.shape.friction = friction
-        self.shape.friction = elasticity
+        self.shape.elasticity = elasticity
 
         self.x = x
         self.y = y 
