@@ -84,13 +84,20 @@ class Player:
             "headCenter" : None,
             "emitterCharge" : 0,
             "grabCooldown" : 0,
-            "emitterLength": 40
+            "emitterLength": 40,
+            "damageCool": 0,
+            "damageCoolLimit" : 120
         }
 
         self.walkingCounter = 0
 
     def add(self):
         self.space.add(self.player, self.feet, *self.hitbox)
+    
+    def damage(self, dmg):
+        if self.state['damageCool'] <= 0:       
+            self.health -= dmg
+            self.state['damageCool'] = self.state['damageCoolLimit']
     
     def update(self):
         self.forceX = 0
@@ -99,6 +106,8 @@ class Player:
         self.flip = np.sign(px.mouse_x - self.player.position[0] - self.app.offsetX)
 
         self.state['headCenter'] = self.player.position[0] + 2 * self.flip, self.player.position[1] + 3
+
+        self.state['damageCool'] = np.clip(self.state['damageCool'] - 1, 0, self.state['damageCoolLimit'])
 
         self.jumpCool -= 1
         if self.jumpCool < 0:
@@ -147,7 +156,7 @@ class Player:
                     [ self.state['headCenter'][0],               self.state['headCenter'][1]],
                     [ self.state['headCenter'][0] + self.state['lookAt'][0] * self.state['emitterLength'], self.state['headCenter'][1] - self.state['lookAt'][1] * self.state['emitterLength']],
                     1,
-                    pymunk.ShapeFilter(mask = pymunk.ShapeFilter.ALL_MASKS ^ constants.MASK_PLATFORM ^ constants.MASK_PLAYER)
+                    pymunk.ShapeFilter(mask = pymunk.ShapeFilter.ALL_MASKS ^ constants.MASK_PLATFORM ^ constants.MASK_PLAYER ^ constants.MASK_ENEMY)
                 )
 
                 #print(query)

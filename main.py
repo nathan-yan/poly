@@ -4,8 +4,9 @@ import pymunk
 
 import constants 
 
-from block import Block, Platform
+from block import Block, Platform, BlockPoly     
 from player import Player
+from enemy import Drifter, Teleporter
 
 debug = False
 
@@ -22,8 +23,8 @@ if debug:
 
 class App:
     def __init__(self):
-        px.init(256, 200, scale = 3, fps = 60, caption = 'ngon', palette = constants.PALETTE)
-        px.load("ngon_resources3.pyxres")
+        px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
+        px.load("ngon_resources4.pyxres")
 
         self.px = px
 
@@ -37,15 +38,20 @@ class App:
 
         self.space.add(self.ground)
 
-        self.blocks = [Block(10, 10, 50, 50), Block(30, 40, 80, 100), Block(10, 10, 80, 150)]
+        self.blocks = [Block(10, 10, 50, 50, self), Block(30, 40, 80, 100, self), Block(10, 10, 80, 150, self)]
         for b in self.blocks:
             b.add(self.space)
         
         self.platforms = [Platform(100, 90, 300, 00), Platform(100, 200, 380, 00), Platform(100, 200, 300, 200)]
         for p in self.platforms:
             p.add(self.space)
+        
+        self.enemies = [Drifter(constants.PENTAGON_VERTICES, 00, 30, self), Drifter(constants.PENTAGON_VERTICES, -20, 20, self, size = 1.5),
+        Teleporter(constants.TRIANGLE_VERTICES, -50, 150, self, size = 3, color = 5)]
+        for e in self.enemies:
+            e.add()
 
-        self.player = Player(20, 20, self)
+        self.player = Player(100, 20, self)
         self.player.add()
 
         self.offsetX = 0
@@ -53,13 +59,29 @@ class App:
 
         px.run(self.update, self.draw)
     
+    def updateEnemies(self):
+        for i in range(len(self.enemies) - 1, -1, -1):
+            e = self.enemies[i]
+            if e.state['dead']:
+                # add back as block
+                self.blocks.append(BlockPoly(*e.body.position, e.shape.get_vertices(), self))
+                self.blocks[-1].add(self.space)
+                del self.enemies[i]
+            else:
+                e.update()
+    
     def update(self):
         self.space.step(1/180.)    
         self.player.update()
+        self.updateEnemies()
+        
         self.space.step(1/180.)    
         self.player.update()
+        self.updateEnemies()
+
         self.space.step(1/180.)    
         self.player.update()
+        self.updateEnemies()
 
         self.player.reset()
 
@@ -94,10 +116,13 @@ class App:
             if self.player.state['persistent']['holding'] and self.player.state['persistent']['holding'].shape == b.shape:
                 fill = False
 
-            b.draw(px, self.offsetX, self.offsetY, col = col, fill = fill)
+            b.draw(col = col, fill = fill)
         
         for p in self.platforms:
             p.draw(px, self.offsetX, self.offsetY)
+        
+        for e in self.enemies:
+            e.draw(self.offsetX, self.offsetY)
         
         # draw crosshair
         px.line(px.mouse_x - 1, px.mouse_y, px.mouse_x + 1, px.mouse_y, 1)
