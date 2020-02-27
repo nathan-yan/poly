@@ -11,8 +11,25 @@ from player import Player
 from enemy import Drifter, Teleporter
 import drawPoly 
 
+
 class App:
     def __init__(self):
+        self.localIP     = "127.0.0.1"
+        self.localPort   = 20001
+        self.bufferSize  = 1024
+
+        self.msgFromServer       = "Hello UDP Client"
+        self.bytesToSend         = str.encode(self.msgFromServer)
+
+        # Create a datagram socket
+        self.UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        
+        # Bind to address and ip
+        self.UDPServerSocket.bind((self.localIP, self.localPort))
+
+        print("UDP server up and listening")
+
+
         px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
 
         self.px = px
@@ -43,6 +60,8 @@ class App:
         self.blocks = [Block(10, 10, 50, 50, self), Block(30, 40, 80, 100, self), Block(10, 10, 80, 150, self)]
         for b in self.blocks:
             b.add(self.space)
+
+        self.addresses = []
         
         px.run(self.update, self.draw)
     
@@ -59,6 +78,23 @@ class App:
             self.player.velocity = (0, -60)
         if px.btn(px.KEY_D):
             self.player.velocity = (60, 0)
+        if px.btn(px.KEY_Q):
+            self.UDPServerSocket.close()
+
+        # send simulation data to client
+        bytesAddressPair = self.UDPServerSocket.recvfrom(self.bufferSize)
+        message = bytesAddressPair[0]
+        print(bytesAddressPair)
+        address = bytesAddressPair[1]
+
+        clientMsg = "Message from Client:{}".format(message)
+        clientIP  = "Client IP Address:{}".format(address)
+        
+        print(clientMsg)
+        print(clientIP)
+
+        # Sending a reply to client
+        self.UDPServerSocket.sendto(self.bytesToSend, self.address)
 
     def draw(self):
         px.cls(7)
@@ -86,33 +122,3 @@ class App:
 
 App()
 
-"""
-localIP     = "127.0.0.1"
-localPort   = 20001
-bufferSize  = 1024
-
-msgFromServer       = "Hello UDP Client"
-bytesToSend         = str.encode(msgFromServer)
-
-# Create a datagram socket
-UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
- 
-# Bind to address and ip
-UDPServerSocket.bind((localIP, localPort))
-print("UDP server up and listening")
-
-# Listen for incoming datagrams
-while(True):
-    bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
-    message = bytesAddressPair[0]
-    address = bytesAddressPair[1]
-
-    clientMsg = "Message from Client:{}".format(message)
-    clientIP  = "Client IP Address:{}".format(address)
-    
-    print(clientMsg)
-    print(clientIP)
-
-    # Sending a reply to client
-    UDPServerSocket.sendto(bytesToSend, address)
-"""

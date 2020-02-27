@@ -1,20 +1,59 @@
 import socket
+import pyxel as px
+import pymunk
+import numpy as np
 
-msgFromClient       = "Hello UDP Server"
+import sys
+sys.path.append('../')
+from block import Block, Platform
+import constants
+from player import Player
+from enemy import Drifter, Teleporter
+import drawPoly 
 
-bytesToSend         = str.encode(msgFromClient)
 
-serverAddressPort   = ("127.0.0.1", 20001)
-bufferSize          = 1024
+class App:
+    def __init__(self):
+        self.msgFromClient       = "Hello UDP Server"
 
-# Create a UDP socket at client side
-UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.bytesToSend         = str.encode(self.msgFromClient)
 
-# Send to server using created UDP socket
-UDPClientSocket.sendto(bytesToSend, serverAddressPort)
+        self.serverAddressPort   = ("127.0.0.1", 20001)
+        self.bufferSize          = 1024
 
-msgFromServer = UDPClientSocket.recvfrom(bufferSize)
+        # Create a UDP socket at client side
+        self.UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.UDPClientSocket.sendto(str.encode("join"), self.serverAddressPort)
 
-msg = "Message from Server {}".format(msgFromServer[0])
+        px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
 
-print(msg)
+        self.px = px
+
+        self.offsetX = 0 
+        self.offsetY = 0
+        
+        px.run(self.update, self.draw)
+    
+    def update(self):
+        
+        if px.btn(px.KEY_W):
+            pass
+            #self.player.velocity = (0, 60)
+        if px.btn(px.KEY_A):
+            pass
+            #self.player.velocity = (-60, 0)
+        if px.btn(px.KEY_S):
+            pass
+            #self.player.velocity = (0, -60)
+        if px.btn(px.KEY_D):
+            pass
+            #self.player.velocity = (60, 0)
+
+        # receive simulation data
+        msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
+        print(msgFromServer)
+
+    def draw(self):
+        px.cls(7)
+
+App()
