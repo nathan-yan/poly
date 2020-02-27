@@ -24,7 +24,7 @@ if debug:
 class App:
     def __init__(self):
         px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
-        px.load("ngon_resources4.pyxres")
+        px.load("resources/ngon_resources4.pyxres")
 
         self.px = px
 
