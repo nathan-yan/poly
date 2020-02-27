@@ -10,25 +10,25 @@ import constants
 from player import Player
 from enemy import Drifter, Teleporter
 import drawPoly 
+import utils 
 
 
 class App:
     def __init__(self):
-        self.localIP     = "127.0.0.1"
-        self.localPort   = 20001
-        self.bufferSize  = 1024
+        # at 100, each 40 bits, maximum of 4000 bits per packet, or roughly 500 bytes
+        # to be safe, request 1024 bytes
 
-        self.msgFromServer       = "Hello UDP Client"
-        self.bytesToSend         = str.encode(self.msgFromServer)
+        self.addr= "127.0.0.1"
+        self.port   = 5001
+        self.bufSize  = 1024
 
-        # Create a datagram socket
-        self.UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         
         # Bind to address and ip
-        self.UDPServerSocket.bind((self.localIP, self.localPort))
+        self.sock.bind((self.addr, self.port))
+        self.sock.setBlocking(False)    # no blocking so server doesn't wait for user input
 
-        print("UDP server up and listening")
-
+        print("Server up")
 
         px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
 
@@ -61,7 +61,7 @@ class App:
         for b in self.blocks:
             b.add(self.space)
 
-        self.addresses = []
+        self.addresses = set() 
         
         px.run(self.update, self.draw)
     
@@ -81,20 +81,87 @@ class App:
         if px.btn(px.KEY_Q):
             self.UDPServerSocket.close()
 
+        message, address = None, None
+        try:
+            bytesAddressPair = self.UDPServerSocket.recvfrom(self.bufferSize)
+            message = bytesAddressPair[0]
+            address = bytesAddressPair[1]
+        except BlockingIOError:
+            print("no packet received")
+        except ConnectionResetError:
+            print('user dropped')
+
+        if message:
+            # user is joining
+            if address not in self.addresses:
+                self.addresses.add(address)
+                        
+                # send acknowledgement
+                self.sock.sendto(b"ack", address)
+                print("user joined @ %s" % address)
+
         # send simulation data to client
-        bytesAddressPair = self.UDPServerSocket.recvfrom(self.bufferSize)
-        message = bytesAddressPair[0]
-        print(bytesAddressPair)
-        address = bytesAddressPair[1]
-
-        clientMsg = "Message from Client:{}".format(message)
-        clientIP  = "Client IP Address:{}".format(address)
-        
-        print(clientMsg)
-        print(clientIP)
-
         # Sending a reply to client
-        self.UDPServerSocket.sendto(self.bytesToSend, self.address)
+        for addr in self.addresses:
+            payload = self._generateSimulationPayload()
+            self.UDPServerSocket.sendto(self.bytesToSend, addr)
+
+    def _generateSimulationPayload(self):
+        """
+            block payload is as follows
+
+            block:
+            {
+                position: (x, y), - 14 bit integers
+                angle: r,         - 11 bit integer
+                blockIndex: n     - 9  bit integer  (max 256 entities)
+            }
+
+            total: 28 + 11 + 9 = 48 bits per block
+            over ~200 blocks is 10000 bits per frame = 10 kb
+            @ 60fps = 600 kb/s
+
+            most blocks probably won't be moving (worst case maybe 100 at a time; mobs + block interactions)
+            this brings it down to roughly 300 kb/s on average.
+            
+            with compression this should be much better, ~100 kb/s
+
+            for this server test, there are only max like 10 blocks, so we keep it down to 500 bits per frame,
+            or about 30 kb/s
+        
+        
+            each block is 48 bits in total, so it's 6 bytes
+        """
+
+        POS_SIZE = 14
+        ANGLE_SIZE = 11
+        IDX_SIZE = 9
+
+        payload = 0
+        for idx, b in enumerate(self.blocks):
+            acc = 0
+
+            pos = b.body.position
+            angle = b.body.angle
+            
+            # quantize to 14 bits signed integer
+            # 14 bits is 16387
+            # field is 2000 wide, gives precision of about 0.12, which is totally fine for what we're doing.
+            prec = 2000 / (2 ** POS_SIZE - 1)
+            invPrec = 1/prec
+            x, y = utils.quantize(x, -1000, 1000, POS_SIZE), utils.quantize(y, -1000, 1000, POS_SIZE)
+
+            acc = x + (y << POS_SIZE)
+
+            # quantize angle to 11 bit integer
+            # convert angle to positive number and remove redundant angle
+            angle %= np.pi * 2
+            r = utils.quantize(angle, 0, np.pi * 2, ANGLE_SIZE)
+
+            acc += r << (POS_SIZE + POS_SIZE)
+            acc += idx << (POS_SIZE + POS_SIZE + ANGLE_SIZE)
+
+            payload += acc << (idx * (POS_SIZE + POS_SIZE + ANGLE_SIZE + IDX_SIZE))        
 
     def draw(self):
         px.cls(7)

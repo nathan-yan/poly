@@ -32,6 +32,7 @@ UDPServerSocket.bind((localIP, localPort))
 print("UDP server up and listening")
 
  
+UDPServerSocket.setblocking(False)
 
 # Listen for incoming datagrams
 
@@ -39,21 +40,26 @@ while(True):
     a = input(">>>")
     if (str(a) == 'q'):
         break;
-     
-    bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
-
-    message = bytesAddressPair[0]
-
-    address = bytesAddressPair[1]
-
-    clientMsg = "Message from Client:{}".format(message)
-    clientIP  = "Client IP Address:{}".format(address)
     
-    print(clientMsg)
-    print(clientIP)
+    try:
+        bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
 
-   
+        message = bytesAddressPair[0]
 
-    # Sending a reply to client
+        address = bytesAddressPair[1]
 
-    UDPServerSocket.sendto(bytesToSend, address)
+        clientMsg = "Message from Client:{}".format(message)
+        clientIP  = "Client IP Address:{}".format(address)
+        
+        print(clientMsg)
+        print(clientIP)
+
+    
+
+        # Sending a reply to client
+
+        UDPServerSocket.sendto(bytesToSend, address)
+    except BlockingIOError:
+        print('no message recieved')
+    except ConnectionResetError:
+        print("client dropped")
