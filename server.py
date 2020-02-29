@@ -80,6 +80,8 @@ class App:
 
         self.time = time.time()
 
+        self.w, self.a, self.s, self.d = 0, 0, 0, 0
+
         px.run(self.update, self.draw)
     
     def updateEnemies(self):
@@ -97,29 +99,42 @@ class App:
         self.ticks += 1
 
         self.space.step(1/180.)    
-        self.player.update()
+        self.player.update({
+            px.KEY_W: self.w,
+            px.KEY_A: self.a,
+            px.KEY_S: self.s, 
+            px.KEY_D: self.d,
+        })
         self.updateEnemies()
         
         self.space.step(1/180.)    
-        self.player.update()
+        self.player.update({
+            px.KEY_W: self.w,
+            px.KEY_A: self.a,
+            px.KEY_S: self.s, 
+            px.KEY_D: self.d,
+        })
         self.updateEnemies()
 
         self.space.step(1/180.)    
-        self.player.update()
+        self.player.update({
+            px.KEY_W: self.w,
+            px.KEY_A: self.a,
+            px.KEY_S: self.s, 
+            px.KEY_D: self.d,
+        })
         self.updateEnemies()
 
         self.player.reset()
 
-        playerPos = self.player.player.position 
-        diffX = px.mouse_x - playerPos[0]
-        offsetXTarget = -playerPos[0] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
+        # send simulation data to client
+        # Sending a reply to client
+        if self.ticks % 2 == 0:
+            for addr in self.addresses:
+                payload = self._generateSimulationState()
+                self.sock.sendto(payload, addr)
 
-        diffY = px.mouse_y - playerPos[1]
-        offsetYTarget = +playerPos[1] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
-
-        self.offsetX = (0.95) * self.offsetX + 0.05 * offsetXTarget
-        self.offsetY = (0.95) * self.offsetY + 0.05 * offsetYTarget
-        
+     
         if (self.ticks % 100 == 0):
             timeElapsed = time.time() - self.time 
             self.time = time.time()    
@@ -154,13 +169,6 @@ class App:
                     self.s = inp & 0b100
                     self.d = inp & 0b1000
 
-        # send simulation data to client
-        # Sending a reply to client
-        if self.ticks % 2 == 0:
-            for addr in self.addresses:
-                payload = self._generateSimulationState()
-                self.sock.sendto(payload, addr)
-            
         #print(self._generateSimulationState())
         
         #if timeElapsed < 
@@ -231,6 +239,11 @@ class App:
         bits += PS
         payload += quantize(playerBody.position[1], -1000, 1000, PS) << bits
         bits += PS
+
+        # walking
+        print(self.player.state['nc']['walking'])
+        payload += (self.player.state['nc']['walking'] + 1) << bits
+        bits += PSS
 
         for idx, b in enumerate(self.blocks):
             pos = b.body.position

@@ -41,6 +41,7 @@ class App:
         self.frameIdxResets = 0
         self.frameInterpolationTicks = 0
         self.tickDifference = 0
+        self.bufferInitialized = False
 
         self.blockSizes = [[10, 10], [30, 40], [10, 10]]
         self.blocks = []
@@ -175,7 +176,12 @@ class App:
             playerY = unquantize(payload & PS_M, -1000, 1000, PS)
             payload >>= PS
 
-            players.append([playerX, playerY])
+            playerState = payload & PSS_M
+            payload >>= PSS
+
+            walking = (playerState & 0b11) - 1
+
+            players.append([playerX, playerY, walking])
 
         blocks = []
         while payload > 0:
@@ -200,9 +206,10 @@ class App:
             print(self.frameBuffer.qsize(), 'size')
 
         # For each frame, pop the earliest frame from the queue
-        if self.ticks == 2 and not self.frameBuffer.empty():
+        if not self.bufferInitialized and not self.frameBuffer.empty():
             self.refFrame = self.frameBuffer.get()
             self.targetFrame = self.refFrame
+            self.bufferInitialized = True
 
         if self.ticks > 2:  # let the buffer fill up a little bit
             
@@ -212,7 +219,7 @@ class App:
 
                 self.targetFrame = self.frameBuffer.get()
                 
-                if self.frameBuffer.qsize() > 1:
+                if self.frameBuffer.qsize() > 2:
                     self.tickDifference = 1
                 else:
                     self.tickDifference = self.targetFrame.idx - self.refFrame.idx
@@ -226,9 +233,22 @@ class App:
                 self.currentFrame = Frame.interpolate(self.refFrame, self.targetFrame, self.frameInterpolationTicks, td = self.tickDifference)
             
             px.cls(7)
+
             
             self.players = self.currentFrame.players
             self.blocks = self.currentFrame.blocks
+
+            # draw player
+            walkState = self.players[0][-1]
+            if walkState:
+                walkFrame = (self.ticks // 2) % 12
+
+                self.px.blt(self.players[0][0] - 7 + self.offsetX, np.round(self.px.height - self.players[0][1] - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * 1  * walkFrame % 12)), 1, 1* 15, 19)
+
+            else:
+                # Player is still
+                self.px.blt(self.players[0][0] - 7 + self.offsetX, self.px.height - self.players[0][1] - 8 + self.offsetY, 0, 1, 1, 1 * 15, 19)
+            
 
             for i, b in enumerate(self.blocks):
                 w, h = self.blockSizes[i]
@@ -251,7 +271,7 @@ class App:
                 for v in range (len(vertices)):
                     px.line(vertices[v][0] + self.offsetX, px.height - vertices[v][1] + self.offsetY , vertices[v - 1][0] + self.offsetX, px.height - vertices[v - 1][1] + self.offsetY, 1)
 
-            px.rect(self.players[0][0] - 5 + self.offsetX, px.height - self.players[0][1] - 5 + self.offsetY , 10, 10, 3)
+            #px.rect(self.players[0][0] - 5 + self.offsetX, px.height - self.players[0][1] - 5 + self.offsetY , 10, 10, 3)
                 
 App()
 

@@ -99,7 +99,7 @@ class Player:
             self.health -= dmg
             self.state['damageCool'] = self.state['damageCoolLimit']
     
-    def update(self):
+    def update(self, keys):
         self.forceX = 0
         self.forceY = 0
 
@@ -130,10 +130,10 @@ class Player:
         if len(onSurface) != 0:
             self.state['nc']['onSurface'] = onSurface[0]
 
-        if self.px.btn(self.px.KEY_D):
+        if keys[px.KEY_D]:
             self.state['nc']['walking'] = 1
         
-        if self.px.btn(self.px.KEY_A):
+        if keys[px.KEY_A]:
             self.state['nc']['walking'] = -1
 
         if self.px.btnp(self.px.KEY_W) and self.state['nc']['onSurface']:
@@ -225,7 +225,7 @@ class Player:
         if self.state['nc']['onSurface']:
             self.walkingCounter += 1
 
-            if self.px.btn(self.px.KEY_W) and self.jumpCool <= 0:
+            if keys[self.px.KEY_W] and self.jumpCool <= 0:
                 self.jumpCool = 20
                 self.player.velocity = self.player.velocity[0], 0
 
@@ -233,7 +233,7 @@ class Player:
 
                 # apply a force to object player is standing on
                 
-            if self.px.btn(self.px.KEY_D):
+            if keys[self.px.KEY_D]:
                 if (self.player.velocity[0] < 70 * (5 - self.player.mass + 2)/5):        # max velocity is limited by the player's mass
                     # originally, friction of surface is 6, player mass is 2, so total force is 12 * 400 = 4800
                     # the 1.5 multiplier originally is an addition of 2400
@@ -241,15 +241,15 @@ class Player:
                 else:
                     self.forceX += self.state['nc']['onSurface'].shape.friction * self.player.mass * 400
 
-            elif self.px.btn(self.px.KEY_A):
+            elif keys[self.px.KEY_A]:
                 if (self.player.velocity[0] > -70 * (5 - self.player.mass + 2)/5):
                     self.forceX -= self.state['nc']['onSurface'].shape.friction * self.player.mass * 400 * 1.5
                 else:
                     self.forceX -= self.state['nc']['onSurface'].shape.friction * self.player.mass * 400
         else:
-            if (self.px.btn(self.px.KEY_D) and self.player.velocity[0] < 25):
+            if (keys[px.KEY_D] and self.player.velocity[0] < 25):
                 self.forceX += 400
-            elif (self.px.btn(self.px.KEY_A) and self.player.velocity[0] > -25):
+            elif (keys[px.KEY_A] and self.player.velocity[0] > -25):
                 self.forceX -= 400
         
         if abs(self.player.velocity[0]) > 100:

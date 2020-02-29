@@ -12,11 +12,13 @@ class Frame:
         ts = td
 
         idx = start.idx + t
+        t = 0
 
         players = []
         for p, p_ in zip(start.players, end.players):
             players.append([p[0] + (p_[0] - p[0]) / ts * t, 
-                            p[1] + (p_[1] - p[1]) / ts * t])
+                            p[1] + (p_[1] - p[1]) / ts * t,
+                            p[2]])
         
         blocks = []
         for b, b_ in zip(start.blocks, end.blocks):
