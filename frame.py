@@ -12,7 +12,7 @@ class Frame:
         ts = td
 
         idx = start.idx + t
-        t = 0
+        #t = 0
 
         players = []
         for p, p_ in zip(start.players, end.players):

@@ -4,8 +4,11 @@ import pymunk
 import time
 import socket
 import queue
+import threading
 
 import constants 
+
+from networking.networking import clientMain
 
 from block import Block, Platform, BlockPoly     
 from player import Player
@@ -13,9 +16,11 @@ from enemy import Drifter, Teleporter
 from frame import Frame
 from utils import quantize, unquantize
 
+lock = threading.Lock()
+
 class App:
     def __init__(self):
-        self.serverAddressPort   = ("127.0.0.1", 5001)
+        self.serverAddressPort   = ("192.168.0.14", 5001)
         self.bufSize          = 1024
 
         self.sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
@@ -30,13 +35,21 @@ class App:
         print("Received ack!")
 
         self.sock.setblocking(False)
+
+        self.toSocket = queue.Queue()
+        self.frameBuffer = queue.Queue(maxsize = 20)    # frameBuffer stores sent frames from the socket
+        self.infoBuffer = queue.Queue()     # infoBuffer stores any game information sent from the socket. This needs to be separate from the frameBuffer to prevent a precious frame being wasted on processing an information packet
+
+        # networking thread should be daemonized because it should stop as soon as the main client stops
+        self.networkingThread = threading.Thread(target = clientMain, args = (self.sock, self.serverAddressPort, self.toSocket, self.frameBuffer, self.infoBuffer, self.bufSize, ), daemon = True) 
+
+        self.networkingThread.start()
         
         px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
         px.load("resources/ngon_resources4.pyxres")
 
         self.px = px
 
-        self.frameBuffer = queue.Queue(maxsize = 20)
         self.prevFrameIdx = 0 
         self.frameIdxResets = 0
         self.frameInterpolationTicks = 0
@@ -61,24 +74,23 @@ class App:
         self.ticks += 1
 
         if self.players:
-            self.offsetX = -100 + px.width/2
+            #self.offsetX = -100 + px.width/2
 
-            self.offsetY = +20 - px.height/4 
+            #self.offsetY = +20 - px.height/4 
 
-        """
-        self.space.step(1/180.)    
+        
+        #self.space.step(1/180.)    
 
-        playerPos = self.player["position"] 
-        diffX = px.mouse_x - playerPos[0]
-        offsetXTarget = -playerPos[0] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
+            playerPos = self.players[0] 
+            diffX = px.mouse_x - playerPos[0]
+            offsetXTarget = -playerPos[0] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
 
-        diffY = px.mouse_y - playerPos[1]
-        offsetYTarget = +playerPos[1] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
+            diffY = px.mouse_y - playerPos[1]
+            offsetYTarget = +playerPos[1] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
 
-        self.offsetX = (0.95) * self.offsetX + 0.05 * offsetXTarget
-        self.offsetY = (0.95) * self.offsetY + 0.05 * offsetYTarget
-        """
-
+            self.offsetX = (0.95) * self.offsetX + 0.05 * offsetXTarget
+            self.offsetY = (0.95) * self.offsetY + 0.05 * offsetYTarget
+            
         inps = 0
 
         if px.btn(px.KEY_W):
@@ -97,109 +109,20 @@ class App:
             inps += 0b1000
 
             pass
+
+        # put player lookat vector
+        #vec = np.array([px.mouse_x - (self.state['headCenter'][0] + self.app.offsetX ), px.mouse_y - (px.height - self.player.position[1] + self.app.offsetY - 3)])
+        #vec /= np.linalg.norm(vec)
+        #self.state['lookAt'] = vec
         
-        # send inputs to server
-        self.sock.sendto((inps).to_bytes(1, byteorder = 'big'), self.serverAddressPort)
+        #if px.btn(px.MOUSE_RIGHT_BUTTON):
+        #    inps += 0b10000
         
-        # receive simulation data
-        frames = []
-        while True:
-            message, address = None, None
-            try: 
-                payload = self.sock.recvfrom(self.bufSize)
-                payload = payload[0]
+        # place inps in outbound queue
+        # eventually each inps is all unacked inps, but for now we assume no packets are dropped
 
-                # parse the payload
-                c, idx, p, players, blocks = self._parsePayload(payload)
-                if idx < self.prevFrameIdx: # the indices have reset
-                    self.frameIdxResets += 1
-                self.prevFrameIdx = idx
-                
-                idx += self.frameIdxResets * 512
-
-                frames.append(Frame(
-                idx,
-                players,
-                blocks,
-                ))
-
-                #print(self.frameBuffer)
-
-            except BlockingIOError:
-                break;
-                #print("no packet received")
-            except ConnectionResetError:
-                print("server dropped")
-                break;
-        
-        # add frames one by one
-        frames = frames[-3 : ]      # only include the most recent 3 frames
-        for f in frames:
-            if not self.frameBuffer.full():
-                self.frameBuffer.put(f)
-
-
-    def _parsePayload(self, payload):
-        # get code and frame index first
-        PS = constants.POS_SIZE
-        AS = constants.ANGLE_SIZE
-        IS = constants.IDX_SIZE
-        FS = constants.FRAME_IDX_SIZE
-        CS = constants.CODE_SIZE
-        PIS = constants.PLAYER_IDX_SIZE
-        PSS = constants.PLAYER_STATE_SIZE
-
-        PS_M = 2 ** PS - 1
-        AS_M = 2 ** AS - 1
-        IS_M = 2 ** IS - 1
-        FS_M = 2 ** FS - 1
-        CS_M = 2 ** CS - 1
-        PIS_M = 2 ** PIS - 1
-        PSS_M = 2 ** PSS - 1
-
-        payload = int.from_bytes(payload, byteorder = 'big')
-
-        code = payload & 0b111
-        payload >>= 3
-
-        frameIdx = payload & FS_M
-        payload >>= FS
-
-        numPlayers = payload & PIS_M
-        payload >>= PIS
-
-        players = []
-        for p in range (numPlayers):
-            playerX = unquantize(payload & PS_M, -1000, 1000, PS)
-            payload >>= PS
-
-            playerY = unquantize(payload & PS_M, -1000, 1000, PS)
-            payload >>= PS
-
-            playerState = payload & PSS_M
-            payload >>= PSS
-
-            walking = (playerState & 0b11) - 1
-
-            players.append([playerX, playerY, walking])
-
-        blocks = []
-        while payload > 0:
-            bx = unquantize(payload & PS_M, -1000, 1000, PS)
-            payload >>= PS
-            by = unquantize(payload & PS_M, -1000, 1000, PS)
-            payload >>= PS
-
-            br = unquantize(payload & AS_M, 0, np.pi * 2, AS)
-            payload >>= AS
-
-            bidx = payload & IS_M
-            payload >>= IS
-        
-            blocks.append([bidx, br, bx,by])
-        
-        #print(code, frameIdx, numPlayers)
-        return code, frameIdx, numPlayers, players, blocks
+        if not self.toSocket.full():
+            self.toSocket.put(inps.to_bytes(1, byteorder = 'big'))
 
     def draw(self):
         if self.ticks % 2 == 0:
@@ -234,20 +157,23 @@ class App:
             
             px.cls(7)
 
-            
             self.players = self.currentFrame.players
             self.blocks = self.currentFrame.blocks
 
             # draw player
+            flip = np.sign(px.mouse_x - self.players[0][0] - self.offsetX)
             walkState = self.players[0][-1]
             if walkState:
                 walkFrame = (self.ticks // 2) % 12
 
-                self.px.blt(self.players[0][0] - 7 + self.offsetX, np.round(self.px.height - self.players[0][1] - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * 1  * walkFrame % 12)), 1, 1* 15, 19)
+                self.px.blt(self.players[0][0] - 7 + self.offsetX, np.round(self.px.height - self.players[0][1] - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * flip  * walkFrame % 12)), 1, flip * 15, 19)
 
             else:
                 # Player is still
-                self.px.blt(self.players[0][0] - 7 + self.offsetX, self.px.height - self.players[0][1] - 8 + self.offsetY, 0, 1, 1, 1 * 15, 19)
+                self.px.blt(self.players[0][0] - 7 + self.offsetX, self.px.height - self.players[0][1] - 8 + self.offsetY, 0, 1, 1, flip * 15, 19)
+
+             # draw ground
+            px.rect(0, px.height + self.offsetY, px.width, 150, 0)
             
 
             for i, b in enumerate(self.blocks):
@@ -270,8 +196,13 @@ class App:
 
                 for v in range (len(vertices)):
                     px.line(vertices[v][0] + self.offsetX, px.height - vertices[v][1] + self.offsetY , vertices[v - 1][0] + self.offsetX, px.height - vertices[v - 1][1] + self.offsetY, 1)
+            
+            # draw crosshair
+            px.line(px.mouse_x - 1, px.mouse_y, px.mouse_x + 1, px.mouse_y, 1)
+            px.line(px.mouse_x, px.mouse_y - 1, px.mouse_x, px.mouse_y + 1, 1)
 
             #px.rect(self.players[0][0] - 5 + self.offsetX, px.height - self.players[0][1] - 5 + self.offsetY , 10, 10, 3)
-                
-App()
+
+if __name__ == "__main__": 
+    App()
 
