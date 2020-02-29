@@ -9,6 +9,14 @@ MASK_ENEMY =           0b100000
 MASK_MOBDAMAGABLE =    0b1000000   # damagable to mobs
 MASK_PLAYERDAMAGABLE = 0b10000000
 
+POS_SIZE = 14
+ANGLE_SIZE = 11
+IDX_SIZE = 9
+FRAME_IDX_SIZE = 12      # rolling buffer of frame indices
+CODE_SIZE = 4       # 1000 is acknowledgement, 1001 is simulation data
+PLAYER_IDX_SIZE = 3
+PLAYER_STATE_SIZE = 3
+
 PENTAGON_VERTICES = np.array([[  0.,  10.],
        [-10.,   3.],
        [ -6.,  -8.],

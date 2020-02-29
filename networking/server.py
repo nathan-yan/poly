@@ -11,9 +11,9 @@ from player import Player
 from enemy import Drifter, Teleporter
 import drawPoly 
 import utils 
+import time 
 
-
-class App:
+class Server:
     def __init__(self):
         # at 100, each 40 bits, maximum of 4000 bits per packet, or roughly 500 bytes
         # to be safe, request 1024 bytes
@@ -21,18 +21,19 @@ class App:
         self.addr= "127.0.0.1"
         self.port   = 5001
         self.bufSize  = 1024
+        self.ticks = 0
 
         self.sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
         
         # Bind to address and ip
         self.sock.bind((self.addr, self.port))
-        self.sock.setBlocking(False)    # no blocking so server doesn't wait for user input
+        self.sock.setblocking(False)    # no blocking so server doesn't wait for user input
 
         print("Server up")
 
-        px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
+        #px.init(512, 400, scale = 2, fps = 60, caption = 'ngon', palette = constants.PALETTE)
 
-        self.px = px
+        #self.px = px
 
         self.space = pymunk.Space()
         self.space.gravity = 0, 0
@@ -62,49 +63,61 @@ class App:
             b.add(self.space)
 
         self.addresses = set() 
+
+        self.w, self.a, self.s, self.d = 0, 0, 0, 0
         
-        px.run(self.update, self.draw)
+        #px.run(self.update, self.draw)
     
     def update(self):
+        self.ticks += 1
+
         self.space.step(1/180.)    
         self.space.step(1/180.)    
         self.space.step(1/180.)    
        
-        if px.btn(px.KEY_W):
+        if  self.w:
             self.player.velocity = (0, 60)
-        if px.btn(px.KEY_A):
+        if self.a:
             self.player.velocity = (-60, 0)
-        if px.btn(px.KEY_S):
+        if self.s:
             self.player.velocity = (0, -60)
-        if px.btn(px.KEY_D):
+        if self.d:
             self.player.velocity = (60, 0)
-        if px.btn(px.KEY_Q):
-            self.UDPServerSocket.close()
+        
+        while True:
+            message, address = None, None
+            try:
+                bytesAddressPair = self.sock.recvfrom(self.bufSize)
+                message = bytesAddressPair[0]
+                address = bytesAddressPair[1]
+            except BlockingIOError:
+                break;
+                #print("no packet received")
+            except ConnectionResetError:
+                print('user dropped')
 
-        message, address = None, None
-        try:
-            bytesAddressPair = self.UDPServerSocket.recvfrom(self.bufferSize)
-            message = bytesAddressPair[0]
-            address = bytesAddressPair[1]
-        except BlockingIOError:
-            print("no packet received")
-        except ConnectionResetError:
-            print('user dropped')
-
-        if message:
-            # user is joining
-            if address not in self.addresses:
-                self.addresses.add(address)
-                        
-                # send acknowledgement
-                self.sock.sendto(b"ack", address)
-                print("user joined @ %s" % address)
+            if message:
+                # user is joining
+                if address not in self.addresses:
+                    self.addresses.add(address)
+                            
+                    # send acknowledgement
+                    self.sock.sendto(b"ack", address)
+                    print(address)
+                    print("user joined @ %s" % address[0] + ':' + str(address[1]))
+                
+                # is an input
+                inp = int.from_bytes(message, byteorder = 'big')
+                self.w = inp & 1 
+                self.a = inp & 0b10
+                self.s = inp & 0b100
+                self.d = inp & 0b1000
 
         # send simulation data to client
         # Sending a reply to client
         for addr in self.addresses:
             payload = self._generateSimulationPayload()
-            self.UDPServerSocket.sendto(self.bytesToSend, addr)
+            self.sock.sendto(payload, addr)
 
     def _generateSimulationPayload(self):
         """
@@ -128,40 +141,11 @@ class App:
 
             for this server test, there are only max like 10 blocks, so we keep it down to 500 bits per frame,
             or about 30 kb/s
-        
-        
+
             each block is 48 bits in total, so it's 6 bytes
         """
 
-        POS_SIZE = 14
-        ANGLE_SIZE = 11
-        IDX_SIZE = 9
-
-        payload = 0
-        for idx, b in enumerate(self.blocks):
-            acc = 0
-
-            pos = b.body.position
-            angle = b.body.angle
-            
-            # quantize to 14 bits signed integer
-            # 14 bits is 16387
-            # field is 2000 wide, gives precision of about 0.12, which is totally fine for what we're doing.
-            prec = 2000 / (2 ** POS_SIZE - 1)
-            invPrec = 1/prec
-            x, y = utils.quantize(x, -1000, 1000, POS_SIZE), utils.quantize(y, -1000, 1000, POS_SIZE)
-
-            acc = x + (y << POS_SIZE)
-
-            # quantize angle to 11 bit integer
-            # convert angle to positive number and remove redundant angle
-            angle %= np.pi * 2
-            r = utils.quantize(angle, 0, np.pi * 2, ANGLE_SIZE)
-
-            acc += r << (POS_SIZE + POS_SIZE)
-            acc += idx << (POS_SIZE + POS_SIZE + ANGLE_SIZE)
-
-            payload += acc << (idx * (POS_SIZE + POS_SIZE + ANGLE_SIZE + IDX_SIZE))        
+        return utils.getPayload(self.ticks % 2048, self.blocks, self.player.position)   
 
     def draw(self):
         px.cls(7)
@@ -187,5 +171,13 @@ class App:
         px.line(400, 0, 0, 0, 2)
         px.line(0, 0, 0, 400, 2)
 
-App()
+s = Server()
+t = time.time()
+# keep it 60 fps
+while True: 
+    s.update()
+    elapsedTime = time.time() - t
+    if (elapsedTime < 1/60.):
+        time.sleep(1/60. - elapsedTime)
+    t = time.time()
 
