@@ -89,6 +89,9 @@ def parsePayload(payload):
 
         players = []
         for p in range (numPlayers):
+            playerIdx = payload & PIS_M
+            payload >>= PIS
+            
             playerX = unquantize(payload & PS_M, -1000, 1000, PS)
             payload >>= PS
 
@@ -100,7 +103,7 @@ def parsePayload(payload):
 
             walking = (playerState & 0b11) - 1
 
-            players.append([playerX, playerY, walking])
+            players.append([playerIdx, playerX, playerY, walking])
 
         blocks = []
         while payload > 0:

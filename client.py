@@ -31,8 +31,13 @@ class App:
         self.sock.settimeout(5)
         
         msg = self.sock.recvfrom(self.bufSize)
-        print(msg)
-        print("Received ack!")
+        message = msg[0]
+        print(message)
+        code = int(message[-1])
+        self.playerIdx  = code
+        self.framePlayerIdx = None
+
+        print("Received ack! I was assigned code %s" % self.playerIdx)
 
         self.sock.setblocking(False)
 
@@ -59,7 +64,6 @@ class App:
         self.blockSizes = [[10, 10], [30, 40], [10, 10]]
         self.blocks = []
         self.players = []
-        self.playerIdx = 0
 
         self.offsetX = 0
         self.offsetY = 0
@@ -81,12 +85,12 @@ class App:
         
         #self.space.step(1/180.)    
 
-            playerPos = self.players[0] 
-            diffX = px.mouse_x - playerPos[0]
-            offsetXTarget = -playerPos[0] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
+            playerPos = self.players[self.framePlayerIdx] 
+            diffX = px.mouse_x - playerPos[1]
+            offsetXTarget = -playerPos[1] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
 
-            diffY = px.mouse_y - playerPos[1]
-            offsetYTarget = +playerPos[1] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
+            diffY = px.mouse_y - playerPos[2]
+            offsetYTarget = +playerPos[2] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
 
             self.offsetX = (0.95) * self.offsetX + 0.05 * offsetXTarget
             self.offsetY = (0.95) * self.offsetY + 0.05 * offsetYTarget
@@ -158,19 +162,26 @@ class App:
             px.cls(7)
 
             self.players = self.currentFrame.players
+            print(self.players)
+            for i, p in enumerate(self.players):
+                
+                if p[0] == self.playerIdx:
+                    self.framePlayerIdx = i
+
             self.blocks = self.currentFrame.blocks
 
             # draw player
-            flip = np.sign(px.mouse_x - self.players[0][0] - self.offsetX)
-            walkState = self.players[0][-1]
-            if walkState:
-                walkFrame = (self.ticks // 2) % 12
+            for p in self.players:
+                flip = np.sign(px.mouse_x - p[1] - self.offsetX)
+                walkState =  p[-1]
+                if walkState:
+                    walkFrame = (self.ticks // 2) % 12
 
-                self.px.blt(self.players[0][0] - 7 + self.offsetX, np.round(self.px.height - self.players[0][1] - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * flip  * walkFrame % 12)), 1, flip * 15, 19)
+                    self.px.blt(p[1] - 7 + self.offsetX, np.round(self.px.height - p[2] - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * flip  * walkFrame % 12)), 1, flip * 15, 19)
 
-            else:
-                # Player is still
-                self.px.blt(self.players[0][0] - 7 + self.offsetX, self.px.height - self.players[0][1] - 8 + self.offsetY, 0, 1, 1, flip * 15, 19)
+                else:
+                    # Player is still
+                    self.px.blt(p[1] - 7 + self.offsetX, self.px.height - p[2] - 8 + self.offsetY, 0, 1, 1, flip * 15, 19)
 
              # draw ground
             px.rect(0, px.height + self.offsetY, px.width, 150, 0)

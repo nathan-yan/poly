@@ -16,9 +16,10 @@ class Frame:
 
         players = []
         for p, p_ in zip(start.players, end.players):
-            players.append([p[0] + (p_[0] - p[0]) / ts * t, 
-                            p[1] + (p_[1] - p[1]) / ts * t,
-                            p[2]])
+            players.append([p[0],
+                            p[1] + (p_[1] - p[1]) / ts * t, 
+                            p[2] + (p_[2] - p[2]) / ts * t,
+                            p[3]])
         
         blocks = []
         for b, b_ in zip(start.blocks, end.blocks):
