@@ -5,6 +5,7 @@ sys.path.append('../')
 import constants
 from frame import Frame
 from utils import quantize, unquantize
+from playerClient import Player
 
 def clientMain(sock, serverAddr, inQ, frameBuf, infoBuf, bufSize = 1024):
     """
@@ -60,6 +61,7 @@ def clientMain(sock, serverAddr, inQ, frameBuf, infoBuf, bufSize = 1024):
 
 def parsePayload(payload):
         # get code and frame index first
+        VS = constants.VECTOR_SIZE
         PS = constants.POS_SIZE
         AS = constants.ANGLE_SIZE
         IS = constants.IDX_SIZE
@@ -68,6 +70,7 @@ def parsePayload(payload):
         PIS = constants.PLAYER_IDX_SIZE
         PSS = constants.PLAYER_STATE_SIZE
 
+        VS_M = 2 ** VS - 1
         PS_M = 2 ** PS - 1
         AS_M = 2 ** AS - 1
         IS_M = 2 ** IS - 1
@@ -98,12 +101,21 @@ def parsePayload(payload):
             playerY = unquantize(payload & PS_M, -1000, 1000, PS)
             payload >>= PS
 
+            playerLookAtX = unquantize(payload & VS_M, -1, 1, 8)
+            payload >>= VS
+            playerLookAtY = unquantize(payload & VS_M, -1, 1, 8)
+            payload >>= VS
+
             playerState = payload & PSS_M
             payload >>= PSS
 
             walking = (playerState & 0b11) - 1
 
-            players.append([playerIdx, playerX, playerY, walking])
+            print([playerLookAtX, playerLookAtY])
+            players.append(Player(idx = playerIdx, x = playerX, y =  playerY, state = {
+                "walking" : walking,
+                "lookAt" : [playerLookAtX, playerLookAtY]
+            }))
 
         blocks = []
         while payload > 0:

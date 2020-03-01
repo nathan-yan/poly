@@ -72,64 +72,71 @@ class App:
 
         self.time = time.time()
 
+        self.player = None
+
+        # for client-side "prediction"
+        self.localState = {
+            "lookAt" : [0, 0]
+        }
+
         px.run(self.update, self.draw)
     
     def update(self):
         self.ticks += 1
 
-        if self.players:
-            #self.offsetX = -100 + px.width/2
+        if self.player:
+            player = self.players[self.framePlayerIdx]
+            diffX = px.mouse_x - self.player.x
+            offsetXTarget = -self.player.x + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
 
-            #self.offsetY = +20 - px.height/4 
-
-        
-        #self.space.step(1/180.)    
-
-            playerPos = self.players[self.framePlayerIdx] 
-            diffX = px.mouse_x - playerPos[1]
-            offsetXTarget = -playerPos[1] + px.width/2 - np.sign(diffX) * np.sqrt(abs(diffX)) * 3
-
-            diffY = px.mouse_y - playerPos[2]
-            offsetYTarget = +playerPos[2] - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
+            diffY = px.mouse_y - self.player.y
+            offsetYTarget = + self.player.y - px.height/4 - np.sign(diffY) * np.sqrt(abs(diffY)) * 3 
 
             self.offsetX = (0.95) * self.offsetX + 0.05 * offsetXTarget
             self.offsetY = (0.95) * self.offsetY + 0.05 * offsetYTarget
+
+            # put player lookat vector
+            self.player.state['headCenter'] = self.player.x + 2 * self.player.state['flip'], self.player.y + 3
+
+            vec = np.array([px.mouse_x - (self.player.state['headCenter'][0] + self.offsetX ), px.mouse_y - (px.height - self.player.y + self.offsetY - 3)])
+
+            vec /= np.linalg.norm(vec)
+            self.localState["lookAt"] = vec
+
+            inps = 0
+
+            if px.btn(px.KEY_W):
+                inps += 0b1
+                pass
+                #self.player.velocity = (0, 60)
+            if px.btn(px.KEY_A):
+                inps += 0b10
+                pass
+                #self.player.velocity = (-60, 0)
+            if px.btn(px.KEY_S):
+                inps += 0b100
+                pass
+                #self.player.velocity = (0, -60)
+            if px.btn(px.KEY_D):
+                inps += 0b1000
+
+                pass
+
+            if px.btn(px.MOUSE_RIGHT_BUTTON):
+                inps += 0b10000
             
-        inps = 0
+            # 8 bit integer
+            inps += quantize(vec[0], -1, 1, 8) << 8
+            inps += quantize(vec[1], -1, 1, 8) << 16
+            
+            # place inps in outbound queue
+            # eventually each inps is all unacked inps, but for now we assume no packets are dropped
 
-        if px.btn(px.KEY_W):
-            inps += 0b1
-            pass
-            #self.player.velocity = (0, 60)
-        if px.btn(px.KEY_A):
-            inps += 0b10
-            pass
-            #self.player.velocity = (-60, 0)
-        if px.btn(px.KEY_S):
-            inps += 0b100
-            pass
-            #self.player.velocity = (0, -60)
-        if px.btn(px.KEY_D):
-            inps += 0b1000
-
-            pass
-
-        # put player lookat vector
-        #vec = np.array([px.mouse_x - (self.state['headCenter'][0] + self.app.offsetX ), px.mouse_y - (px.height - self.player.position[1] + self.app.offsetY - 3)])
-        #vec /= np.linalg.norm(vec)
-        #self.state['lookAt'] = vec
-        
-        #if px.btn(px.MOUSE_RIGHT_BUTTON):
-        #    inps += 0b10000
-        
-        # place inps in outbound queue
-        # eventually each inps is all unacked inps, but for now we assume no packets are dropped
-
-        if not self.toSocket.full():
-            self.toSocket.put(inps.to_bytes(1, byteorder = 'big'))
+            if not self.toSocket.full():
+                self.toSocket.put(inps.to_bytes(3, byteorder = 'big'))
 
     def draw(self):
-        if self.ticks % 2 == 0:
+        if self.ticks % 5 == 0:
             print(self.frameBuffer.qsize(), 'size')
 
         # For each frame, pop the earliest frame from the queue
@@ -162,26 +169,35 @@ class App:
             px.cls(7)
 
             self.players = self.currentFrame.players
-            print(self.players)
             for i, p in enumerate(self.players):
                 
-                if p[0] == self.playerIdx:
+                if p.idx  == self.playerIdx:
+                    self.player = p
                     self.framePlayerIdx = i
 
             self.blocks = self.currentFrame.blocks
 
             # draw player
             for p in self.players:
-                flip = np.sign(px.mouse_x - p[1] - self.offsetX)
-                walkState =  p[-1]
+                flip = p.state['flip']
+                walkState =  p.state["walking"]
+                
+                if p.idx == self.playerIdx:
+                    flip = np.sign(self.localState['lookAt'][0])
+
                 if walkState:
                     walkFrame = (self.ticks // 2) % 12
 
-                    self.px.blt(p[1] - 7 + self.offsetX, np.round(self.px.height - p[2] - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * flip  * walkFrame % 12)), 1, flip * 15, 19)
+                    self.px.blt(p.x - 7 + self.offsetX, np.round(self.px.height - p.y - 8, 2) + self.offsetY, 0, 1 + (15 + 2+ 1) * (1 + (walkState * flip  * walkFrame % 12)), 1, flip * 15, 19)
 
                 else:
                     # Player is still
-                    self.px.blt(p[1] - 7 + self.offsetX, self.px.height - p[2] - 8 + self.offsetY, 0, 1, 1, flip * 15, 19)
+                    self.px.blt(p.x - 7 + self.offsetX, self.px.height - p.y - 8 + self.offsetY, 0, 1, 1, flip * 15, 19)
+            
+            # draw lookat
+                px.pset(p.state['headCenter'][0] + p.state['lookAt'][0] * 7 + self.offsetX, px.height - p.state['headCenter'][1] + p.state['lookAt'][1] * 7 + self.offsetY, 1)
+
+                #px.rect()
 
              # draw ground
             px.rect(0, px.height + self.offsetY, px.width, 150, 0)
@@ -207,7 +223,7 @@ class App:
 
                 for v in range (len(vertices)):
                     px.line(vertices[v][0] + self.offsetX, px.height - vertices[v][1] + self.offsetY , vertices[v - 1][0] + self.offsetX, px.height - vertices[v - 1][1] + self.offsetY, 1)
-            
+
             # draw crosshair
             px.line(px.mouse_x - 1, px.mouse_y, px.mouse_x + 1, px.mouse_y, 1)
             px.line(px.mouse_x, px.mouse_y - 1, px.mouse_x, px.mouse_y + 1, 1)

@@ -1,3 +1,5 @@
+from playerClient import Player
+
 class Frame:
     def __init__(self, idx, players, blocks, enemies = None):
         self.idx = idx
@@ -16,10 +18,7 @@ class Frame:
 
         players = []
         for p, p_ in zip(start.players, end.players):
-            players.append([p[0],
-                            p[1] + (p_[1] - p[1]) / ts * t, 
-                            p[2] + (p_[2] - p[2]) / ts * t,
-                            p[3]])
+            players.append(Player.interpolate(p, p_, t, td))
         
         blocks = []
         for b, b_ in zip(start.blocks, end.blocks):
