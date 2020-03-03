@@ -201,7 +201,8 @@ class App:
     
         mob: 
             {
-                tbd
+                position: (x, y), - 14 bit integers
+                
             }
         
         each payload will start with a code signifiying what it represents

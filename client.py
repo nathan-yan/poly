@@ -181,9 +181,11 @@ class App:
             for p in self.players:
                 flip = p.state['flip']
                 walkState =  p.state["walking"]
+                lookAt = p.state['lookAt']
                 
                 if p.idx == self.playerIdx:
                     flip = np.sign(self.localState['lookAt'][0])
+                    lookAt = self.localState['lookAt']
 
                 if walkState:
                     walkFrame = (self.ticks // 2) % 12
@@ -195,7 +197,7 @@ class App:
                     self.px.blt(p.x - 7 + self.offsetX, self.px.height - p.y - 8 + self.offsetY, 0, 1, 1, flip * 15, 19)
             
             # draw lookat
-                px.pset(p.state['headCenter'][0] + p.state['lookAt'][0] * 7 + self.offsetX, px.height - p.state['headCenter'][1] + p.state['lookAt'][1] * 7 + self.offsetY, 1)
+                px.pset(p.state['headCenter'][0] + lookAt[0] * 7 + self.offsetX, px.height - p.state['headCenter'][1] + lookAt[1] * 7 + self.offsetY, 1)
 
                 #px.rect()
 
